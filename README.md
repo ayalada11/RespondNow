@@ -10,21 +10,17 @@ An email agent you CC in your email threads to book meetings, share availability
 4. If the lead doesn't respond, the agent **follows up 3 times** automatically
 5. After 3 follow-ups with no response, it notifies you and stops
 
-## Setup
+## Deploy to Railway
 
-### 1. Install dependencies
+### 1. Create a Railway project
 
-```bash
-npm install
-```
+- Go to [railway.app](https://railway.app) and create a new project
+- Connect your GitHub repo (`ayalada11/RespondNow`)
+- Railway auto-detects the `railway.json` config and deploys
 
-### 2. Configure environment
+### 2. Set environment variables
 
-```bash
-cp .env.example .env
-```
-
-Fill in your `.env`:
+In Railway dashboard > Variables, add:
 
 | Variable | Description |
 |---|---|
@@ -33,44 +29,48 @@ Fill in your `.env`:
 | `GOOGLE_CLIENT_ID` | Google OAuth2 client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret |
 | `GOOGLE_REFRESH_TOKEN` | Get this by running the OAuth flow (see below) |
-| `SMTP_HOST/PORT/USER/PASS` | SMTP credentials for sending emails |
+| `SMTP_HOST` | SMTP server (e.g. `smtp.gmail.com`) |
+| `SMTP_PORT` | SMTP port (e.g. `587`) |
+| `SMTP_USER` | SMTP username |
+| `SMTP_PASS` | SMTP password / app password |
+
+Railway sets `PORT` automatically — no need to add it.
 
 ### 3. Connect Google Calendar
 
-```bash
-npm run dev
-```
+Once deployed, visit `https://your-app.up.railway.app/auth/google` in your browser, authorize, and add the returned refresh token as `GOOGLE_REFRESH_TOKEN` in Railway variables.
 
-Visit `http://localhost:3000/auth/google` in your browser, authorize the app, and copy the refresh token into your `.env`.
+The Google OAuth redirect URI auto-detects your Railway domain (via `RAILWAY_PUBLIC_DOMAIN`).
 
 ### 4. Set up inbound email webhook
 
-Configure your email provider to forward inbound emails to your webhook:
+Point your email provider to your Railway URL:
 
 **SendGrid Inbound Parse:**
 - Settings > Inbound Parse > Add Host & URL
-- URL: `https://yourdomain.com/webhook/inbound`
+- URL: `https://your-app.up.railway.app/webhook/inbound`
 
 **Mailgun Routes:**
 - Create a route matching your agent email
-- Forward to: `https://yourdomain.com/webhook/inbound`
+- Forward to: `https://your-app.up.railway.app/webhook/inbound`
 
 **Postmark Inbound:**
-- Set inbound webhook URL to: `https://yourdomain.com/webhook/inbound`
+- Set inbound webhook URL to: `https://your-app.up.railway.app/webhook/inbound`
 
-### 5. Set up follow-up cron
+### 5. Follow-ups run automatically
 
-Run follow-up processing on a schedule (e.g., every hour):
+No cron needed — the server runs follow-up checks every hour in-process. You can also trigger manually:
 
 ```bash
-# crontab -e
-0 * * * * cd /path/to/respond-now && npm run follow-up:process
+curl -X POST https://your-app.up.railway.app/api/follow-ups/process
 ```
 
-Or trigger manually:
+## Local Development
 
 ```bash
-curl -X POST http://localhost:3000/api/follow-ups/process
+npm install
+cp .env.example .env  # fill in credentials
+npm run dev
 ```
 
 ## Usage

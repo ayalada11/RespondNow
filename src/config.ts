@@ -13,7 +13,9 @@ export const config = {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     redirectUri:
       process.env.GOOGLE_REDIRECT_URI ||
-      "http://localhost:3000/auth/google/callback",
+      (process.env.RAILWAY_PUBLIC_DOMAIN
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/auth/google/callback`
+        : "http://localhost:3000/auth/google/callback"),
     refreshToken: process.env.GOOGLE_REFRESH_TOKEN || "",
   },
 

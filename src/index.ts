@@ -116,7 +116,36 @@ app.get("/auth/google/callback", async (req, res) => {
   }
 });
 
+// In-process follow-up scheduler (runs every hour)
+// Replaces cron — works on Railway/Render/Heroku without external scheduler
+const FOLLOW_UP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+function startFollowUpScheduler() {
+  console.log("[Scheduler] Follow-up processor running every hour");
+  setInterval(async () => {
+    try {
+      const count = await processFollowUps();
+      if (count > 0) {
+        console.log(`[Scheduler] Processed ${count} follow-ups`);
+      }
+    } catch (err) {
+      console.error("[Scheduler] Follow-up processing error:", err);
+    }
+  }, FOLLOW_UP_INTERVAL_MS);
+
+  // Also run once on startup after a short delay
+  setTimeout(async () => {
+    try {
+      const count = await processFollowUps();
+      console.log(`[Scheduler] Startup follow-up check: ${count} processed`);
+    } catch (err) {
+      console.error("[Scheduler] Startup follow-up error:", err);
+    }
+  }, 10_000);
+}
+
 app.listen(config.port, () => {
+  startFollowUpScheduler();
   console.log(`
 ╔══════════════════════════════════════════╗
 ║          RespondNow Agent Running        ║
@@ -124,6 +153,7 @@ app.listen(config.port, () => {
 ║  Agent email: ${config.agentEmail.padEnd(26)}║
 ║  Port:        ${String(config.port).padEnd(26)}║
 ║  Webhook:     POST /webhook/inbound      ║
+║  Follow-ups:  Every 60 min (in-process)  ║
 ╚══════════════════════════════════════════╝
 
 CC ${config.agentEmail} in any email thread to start booking meetings.
