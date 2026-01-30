@@ -6,7 +6,7 @@ export const config = {
   agentEmail: process.env.AGENT_EMAIL || "assistant@yourdomain.com",
   agentName: process.env.AGENT_NAME || "RespondNow",
 
-  openaiApiKey: process.env.OPENAI_API_KEY || "",
+  geminiApiKey: process.env.GEMINI_API_KEY || "",
 
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID || "",

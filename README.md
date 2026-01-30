@@ -25,7 +25,7 @@ In Railway dashboard > Variables, add:
 | Variable | Description |
 |---|---|
 | `AGENT_EMAIL` | The email address for your agent (e.g. `assistant@yourdomain.com`) |
-| `OPENAI_API_KEY` | OpenAI API key for intent classification |
+| `GEMINI_API_KEY` | Google Gemini API key ([free at aistudio.google.com](https://aistudio.google.com/apikey)) |
 | `GOOGLE_CLIENT_ID` | Google OAuth2 client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret |
 | `GOOGLE_REFRESH_TOKEN` | Get this by running the OAuth flow (see below) |

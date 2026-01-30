@@ -12,9 +12,8 @@
   "dependencies": {
     "express": "^4.18.2",
     "googleapis": "^128.0.0",
-    "mailparse": "^0.0.8",
+    "@google/generative-ai": "^0.21.0",
     "nodemailer": "^6.9.7",
-    "openai": "^4.20.0",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
     "uuid": "^9.0.0",
