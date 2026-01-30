@@ -11,7 +11,7 @@ import {
   isBefore,
   format,
 } from "date-fns";
-import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { utcToZonedTime, zonedTimeToUtc } from "date-fns-tz";
 
 const oauth2Client = new google.auth.OAuth2(
   config.google.clientId,
@@ -70,23 +70,23 @@ export async function getAvailableSlots(
 
   for (let d = 0; d < daysAhead; d++) {
     const day = addDays(now, d);
-    const dayStart = fromZonedTime(
+    const dayStart = zonedTimeToUtc(
       setMinutes(
-        setHours(startOfDay(toZonedTime(day, tz)), config.availability.workStartHour),
+        setHours(startOfDay(utcToZonedTime(day, tz)), config.availability.workStartHour),
         0
       ),
       tz
     );
-    const dayEnd = fromZonedTime(
+    const dayEnd = zonedTimeToUtc(
       setMinutes(
-        setHours(startOfDay(toZonedTime(day, tz)), config.availability.workEndHour),
+        setHours(startOfDay(utcToZonedTime(day, tz)), config.availability.workEndHour),
         0
       ),
       tz
     );
 
     // Skip weekends (0 = Sunday, 6 = Saturday)
-    const zonedDay = toZonedTime(day, tz);
+    const zonedDay = utcToZonedTime(day, tz);
     if (zonedDay.getDay() === 0 || zonedDay.getDay() === 6) continue;
 
     let cursor = isAfter(now, dayStart) ? now : dayStart;
@@ -127,8 +127,8 @@ export function formatAvailability(slots: TimeSlot[], maxSlots = 8): string {
   }
 
   const lines = display.map((slot, i) => {
-    const zonedStart = toZonedTime(slot.start, tz);
-    const zonedEnd = toZonedTime(slot.end, tz);
+    const zonedStart = utcToZonedTime(slot.start, tz);
+    const zonedEnd = utcToZonedTime(slot.end, tz);
     return `  ${i + 1}. ${format(zonedStart, "EEEE, MMM d")} at ${format(zonedStart, "h:mm a")} - ${format(zonedEnd, "h:mm a")} (${tz})`;
   });
 
