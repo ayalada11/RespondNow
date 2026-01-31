@@ -200,3 +200,11 @@ CC ${config.agentEmail} in any email thread to start booking meetings.
 });
 
 export default app;
+app.get("/debug/auth-url", (_req, res) => {
+  const url = getAuthUrl();
+  res.json({ 
+    authUrl: url,
+    configRedirectUri: config.google.redirectUri,
+    railwayDomain: process.env.RAILWAY_PUBLIC_DOMAIN
+  });
+});
