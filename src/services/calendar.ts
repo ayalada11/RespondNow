@@ -198,18 +198,19 @@ export function getAuthUrl(): string {
 export async function exchangeCode(
   code: string
 ): Promise<{ refreshToken: string }> {
-  console.log("[Auth] RAW ENV - GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID);
-  console.log("[Auth] RAW ENV - GOOGLE_CLIENT_SECRET:", process.env.GOOGLE_CLIENT_SECRET ? "exists" : "missing");
-  console.log("[Auth] RAW ENV - RAILWAY_PUBLIC_DOMAIN:", process.env.RAILWAY_PUBLIC_DOMAIN);
-  
   const clientId = process.env.GOOGLE_CLIENT_ID || "";
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
   const redirectUri = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/auth/google/callback`;
   
-  console.log("[Auth] Using redirect URI:", redirectUri);
+  console.log("[Auth] Client ID:", clientId);
+  console.log("[Auth] Redirect URI:", redirectUri);
   
   const client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
   
-  const { tokens } = await client.getToken(code);
+  const { tokens } = await client.getToken({
+    code: code,
+    redirect_uri: redirectUri,
+  });
+  
   return { refreshToken: tokens.refresh_token || "" };
 }
