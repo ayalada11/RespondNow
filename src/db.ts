@@ -52,6 +52,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_conversations_thread ON conversations(thread_id);
   CREATE INDEX IF NOT EXISTS idx_followups_status ON follow_ups(status, next_follow_up_at);
   CREATE INDEX IF NOT EXISTS idx_followups_conversation ON follow_ups(conversation_id);
+
+  CREATE TABLE IF NOT EXISTS processed_emails (
+    gmail_message_id TEXT PRIMARY KEY,
+    processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 export default db;

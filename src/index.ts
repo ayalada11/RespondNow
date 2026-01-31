@@ -7,6 +7,7 @@ import {
 import { handleInboundEmail } from "./services/agent";
 import { getAuthUrl, exchangeCode } from "./services/calendar";
 import { processFollowUps } from "./jobs/processFollowUps";
+import { pollGmailInbox } from "./services/gmailPoller";
 
 const app = express();
 
@@ -107,7 +108,7 @@ app.get("/auth/google/callback", async (req, res) => {
     const code = req.query.code as string;
     const { refreshToken } = await exchangeCode(code);
     res.json({
-      message: "Google Calendar connected! Add this refresh token to your .env",
+      message: "Google Calendar + Gmail connected! Add this refresh token to your Railway env vars as GOOGLE_REFRESH_TOKEN, then redeploy.",
       refreshToken,
     });
   } catch (err) {
@@ -116,8 +117,39 @@ app.get("/auth/google/callback", async (req, res) => {
   }
 });
 
+// Gmail inbox polling (checks every 2 minutes)
+const GMAIL_POLL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+
+function startGmailPoller() {
+  if (!config.google.refreshToken) {
+    console.log("[Gmail] No refresh token — skipping Gmail polling. Visit /auth/google to connect.");
+    return;
+  }
+
+  console.log("[Gmail] Polling inbox every 2 minutes");
+  setInterval(async () => {
+    try {
+      const count = await pollGmailInbox();
+      if (count > 0) {
+        console.log(`[Gmail] Processed ${count} new emails`);
+      }
+    } catch (err) {
+      console.error("[Gmail] Polling error:", err);
+    }
+  }, GMAIL_POLL_INTERVAL_MS);
+
+  // Run once on startup after a short delay
+  setTimeout(async () => {
+    try {
+      const count = await pollGmailInbox();
+      console.log(`[Gmail] Startup inbox check: ${count} emails processed`);
+    } catch (err) {
+      console.error("[Gmail] Startup polling error:", err);
+    }
+  }, 5_000);
+}
+
 // In-process follow-up scheduler (runs every hour)
-// Replaces cron — works on Railway/Render/Heroku without external scheduler
 const FOLLOW_UP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 function startFollowUpScheduler() {
@@ -133,7 +165,6 @@ function startFollowUpScheduler() {
     }
   }, FOLLOW_UP_INTERVAL_MS);
 
-  // Also run once on startup after a short delay
   setTimeout(async () => {
     try {
       const count = await processFollowUps();
@@ -145,6 +176,7 @@ function startFollowUpScheduler() {
 }
 
 app.listen(config.port, () => {
+  startGmailPoller();
   startFollowUpScheduler();
   console.log(`
 ╔══════════════════════════════════════════╗
@@ -152,8 +184,8 @@ app.listen(config.port, () => {
 ╠══════════════════════════════════════════╣
 ║  Agent email: ${config.agentEmail.padEnd(26)}║
 ║  Port:        ${String(config.port).padEnd(26)}║
-║  Webhook:     POST /webhook/inbound      ║
-║  Follow-ups:  Every 60 min (in-process)  ║
+║  Gmail poll:  Every 2 min               ║
+║  Follow-ups:  Every 60 min              ║
 ╚══════════════════════════════════════════╝
 
 CC ${config.agentEmail} in any email thread to start booking meetings.

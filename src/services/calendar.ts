@@ -183,7 +183,11 @@ export async function bookMeeting(
 export function getAuthUrl(): string {
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
-    scope: ["https://www.googleapis.com/auth/calendar"],
+    scope: [
+      "https://www.googleapis.com/auth/calendar",
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/gmail.modify",
+    ],
     prompt: "consent",
   });
 }
