@@ -1,4 +1,4 @@
-{
+  {
   "name": "respond-now",
   "version": "1.0.0",
   "description": "Email meeting booking agent - CC it in your emails to book meetings, share availability, and follow up with leads",
@@ -10,9 +10,9 @@
     "follow-up:process": "ts-node src/jobs/processFollowUps.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "express": "^4.18.2",
     "googleapis": "^128.0.0",
-    "@google/generative-ai": "^0.21.0",
     "nodemailer": "^6.9.7",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
