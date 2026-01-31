@@ -202,15 +202,10 @@ export async function exchangeCode(
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
   const redirectUri = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/auth/google/callback`;
   
-  console.log("[Auth] Client ID:", clientId);
-  console.log("[Auth] Redirect URI:", redirectUri);
+  console.log("[Auth] Exchanging code:", code.substring(0, 20) + "...");
   
   const client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
   
-  const { tokens } = await client.getToken({
-    code: code,
-    redirect_uri: redirectUri,
-  });
-  
+  const { tokens } = await client.getToken(code);
   return { refreshToken: tokens.refresh_token || "" };
 }
