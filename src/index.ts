@@ -100,7 +100,19 @@ app.get("/api/conversations/:threadId", (req, res) => {
  * Visit /auth/google to start, callback saves the refresh token.
  */
 app.get("/auth/google", (_req, res) => {
-  res.redirect(getAuthUrl());
+  const url = getAuthUrl();
+  console.log("[Auth] Redirecting to:", url);
+  console.log("[Auth] Redirect URI configured as:", config.google.redirectUri);
+  res.redirect(url);
+});
+
+// Debug: show what redirect URI the app is using
+app.get("/auth/debug", (_req, res) => {
+  res.json({
+    redirectUri: config.google.redirectUri,
+    railwayPublicDomain: process.env.RAILWAY_PUBLIC_DOMAIN || "(not set)",
+    googleRedirectUriEnv: process.env.GOOGLE_REDIRECT_URI || "(not set)",
+  });
 });
 
 app.get("/auth/google/callback", async (req, res) => {
