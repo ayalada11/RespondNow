@@ -31,7 +31,6 @@ export async function sendEmail(options: SendEmailOptions): Promise<string> {
       : options.cc
     : "";
 
-  // Build email headers
   const headers = [
     `From: "${config.agentName}" <${config.agentEmail}>`,
     `To: ${toAddresses}`,
@@ -52,14 +51,21 @@ export async function sendEmail(options: SendEmailOptions): Promise<string> {
     headers.push(`References: ${options.references.join(" ")}`);
   }
 
-  // Build raw email
   const email = [...headers, "", options.text].join("\r\n");
 
-  // Encode to base64url
   const encodedEmail = Buffer.from(email)
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 
-  // Send via G
+  const response = await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: encodedEmail,
+    },
+  });
+
+  console.log(`[EmailSender] Sent email to ${toAddresses}: ${response.data.id}`);
+  return response.data.id || "";
+}
