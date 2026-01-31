@@ -99,13 +99,16 @@ app.get("/api/conversations/:threadId", (req, res) => {
  * Google OAuth2 setup flow.
  * Visit /auth/google to start, callback saves the refresh token.
  */
-app.get("/auth/google", (_req, res) => {
-  res.redirect(getAuthUrl());
-});
-
 app.get("/auth/google/callback", async (req, res) => {
   try {
-    const code = req.query.code as string;
+    const code = req.query.code;
+    
+    console.log("[Auth] Callback received, code:", code);
+    
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: "No authorization code received" });
+    }
+    
     const { refreshToken } = await exchangeCode(code);
     res.json({
       message: "Google Calendar + Gmail connected! Add this refresh token to your Railway env vars as GOOGLE_REFRESH_TOKEN, then redeploy.",
@@ -114,6 +117,8 @@ app.get("/auth/google/callback", async (req, res) => {
   } catch (err) {
     console.error("[Auth] Google OAuth error:", err);
     res.status(500).json({ error: "OAuth failed" });
+  }
+});
   }
 });
 
