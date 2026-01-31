@@ -176,11 +176,11 @@ Respond in JSON format:
   "reply": "<a helpful, concise reply email body to send back>"
 }`;
 
-  const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    generationConfig: {
-      temperature: 0.3,
-      responseMimeType: "application/json",
+const model = genAI.getGenerativeModel({
+  model: "gemini-2.0-flash",
+  generationConfig: {
+    temperature: 0.3,
+    responseMimeType: "application/json",
     },
   });
 
