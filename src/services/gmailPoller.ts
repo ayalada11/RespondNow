@@ -16,19 +16,48 @@ oauth2Client.setCredentials({
 
 const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
+// Domains/patterns to ignore (automated emails)
+const IGNORED_DOMAINS = [
+  "notify.railway.app",
+  "news.railway.app",
+  "noreply@",
+  "no-reply@",
+  "notifications@",
+  "mailer-daemon@",
+  "postmaster@",
+  "github.com",
+  "gitlab.com",
+  "linkedin.com",
+  "facebookmail.com",
+  "amazonses.com",
+  "sendgrid.net",
+  "mailchimp.com",
+  "slack.com",
+  "calendar-notification@google.com",
+];
+
+function shouldIgnoreEmail(email: string): boolean {
+  const lower = email.toLowerCase();
+  return IGNORED_DOMAINS.some(
+    (pattern) => lower.includes(pattern)
+  );
+}
+
 /**
  * Poll Gmail inbox for new emails where the agent is CC'd.
- * Checks every poll cycle for unread messages, processes them,
- * and marks them as read.
+ * Only processes emails where:
+ * - Agent is in CC (not just TO)
+ * - Sender is a real person (not automated)
+ * - There are other recipients (a real conversation)
  */
 export async function pollGmailInbox(): Promise<number> {
   const agentEmail = config.agentEmail.toLowerCase();
 
   try {
-    // Search for unread emails where the agent is in CC or TO
+    // Search for unread emails where the agent is in CC only
     const response = await gmail.users.messages.list({
       userId: "me",
-      q: `is:unread (cc:${agentEmail} OR to:${agentEmail})`,
+      q: `is:unread cc:${agentEmail}`,
       maxResults: 10,
     });
 
@@ -66,15 +95,39 @@ export async function pollGmailInbox(): Promise<number> {
 
         if (!email) {
           console.log(`[Gmail] Could not parse message ${msg.id}, skipping`);
+          await markAsProcessedAndRead(msg.id);
           continue;
         }
 
         // Skip emails sent BY the agent (our own replies)
         if (email.from.toLowerCase() === agentEmail) {
-          db.prepare(
-            "INSERT OR IGNORE INTO processed_emails (gmail_message_id) VALUES (?)"
-          ).run(msg.id);
-          await markAsRead(msg.id);
+          console.log(`[Gmail] Skipping own reply: ${msg.id}`);
+          await markAsProcessedAndRead(msg.id);
+          continue;
+        }
+
+        // Skip automated emails
+        if (shouldIgnoreEmail(email.from)) {
+          console.log(`[Gmail] Skipping automated email from: ${email.from}`);
+          await markAsProcessedAndRead(msg.id);
+          continue;
+        }
+
+        // Skip if agent is not actually in CC
+        const ccEmails = email.cc.map((e) => e.toLowerCase());
+        if (!ccEmails.includes(agentEmail)) {
+          console.log(`[Gmail] Agent not in CC, skipping: ${msg.id}`);
+          await markAsProcessedAndRead(msg.id);
+          continue;
+        }
+
+        // Skip if no other recipients (just sent to agent)
+        const otherRecipients = [...email.to, ...email.cc].filter(
+          (e) => e.toLowerCase() !== agentEmail
+        );
+        if (otherRecipients.length === 0) {
+          console.log(`[Gmail] No other recipients, skipping: ${msg.id}`);
+          await markAsProcessedAndRead(msg.id);
           continue;
         }
 
@@ -85,13 +138,8 @@ export async function pollGmailInbox(): Promise<number> {
         // Process through the agent
         await handleInboundEmail(email);
 
-        // Mark as processed
-        db.prepare(
-          "INSERT OR IGNORE INTO processed_emails (gmail_message_id) VALUES (?)"
-        ).run(msg.id);
-
-        // Mark as read in Gmail
-        await markAsRead(msg.id);
+        // Mark as processed and read
+        await markAsProcessedAndRead(msg.id);
 
         processed++;
       } catch (err) {
@@ -104,6 +152,13 @@ export async function pollGmailInbox(): Promise<number> {
     console.error("[Gmail] Error polling inbox:", err);
     return 0;
   }
+}
+
+async function markAsProcessedAndRead(messageId: string): Promise<void> {
+  db.prepare(
+    "INSERT OR IGNORE INTO processed_emails (gmail_message_id) VALUES (?)"
+  ).run(messageId);
+  await markAsRead(messageId);
 }
 
 async function markAsRead(messageId: string): Promise<void> {
