@@ -42,3 +42,5 @@ export const config = {
     ),
   },
 };
+console.log("[Config] GOOGLE_CLIENT_ID exists:", !!process.env.GOOGLE_CLIENT_ID);
+console.log("[Config] GOOGLE_CLIENT_SECRET exists:", !!process.env.GOOGLE_CLIENT_SECRET);
