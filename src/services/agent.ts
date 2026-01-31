@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Anthropic from "@anthropic-ai/sdk";
 import { config } from "../config";
 import { ParsedEmail } from "./emailParser";
 import {
@@ -12,7 +12,9 @@ import db from "../db";
 import { v4 as uuidv4 } from "uuid";
 import { addHours, parseISO } from "date-fns";
 
-const genAI = new GoogleGenerativeAI(config.geminiApiKey);
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
 
 export type Intent =
   | "request_meeting"
@@ -31,17 +33,10 @@ interface AgentDecision {
 
 /**
  * Main agent: processes an inbound email where the agent was CC'd.
- *
- * Flow:
- * 1. Detect who CC'd the agent (the "owner") vs. who the lead is
- * 2. Classify intent of the email
- * 3. Take action (share availability, book meeting, queue follow-up)
- * 4. Reply to the thread
  */
 export async function handleInboundEmail(email: ParsedEmail): Promise<void> {
   const agentEmail = config.agentEmail.toLowerCase();
 
-  // Determine who is the owner (the person who CC'd the agent) vs the lead
   const allRecipients = [...email.to, ...email.cc].map((e) => e.toLowerCase());
   const isAgentCCd = allRecipients.includes(agentEmail);
 
@@ -53,13 +48,11 @@ export async function handleInboundEmail(email: ParsedEmail): Promise<void> {
   const senderEmail = email.from.toLowerCase();
   const otherRecipients = allRecipients.filter((e) => e !== agentEmail);
 
-  // Look up or create conversation
   let conversation = db
     .prepare("SELECT * FROM conversations WHERE thread_id = ?")
     .get(email.threadId) as any;
 
   if (!conversation) {
-    // First time seeing this thread — sender is the owner, others are leads
     const conversationId = uuidv4();
     const leadEmail =
       otherRecipients.find((e) => e !== senderEmail) || senderEmail;
@@ -83,21 +76,17 @@ export async function handleInboundEmail(email: ParsedEmail): Promise<void> {
       owner_email: senderEmail,
     };
 
-    // Owner CC'd the agent — share availability with the lead
     await handleShareAvailability(email, conversation);
     return;
   }
 
-  // Existing conversation — this is a reply
   const isFromOwner = senderEmail === conversation.owner_email;
   const isFromLead = senderEmail === conversation.to_email;
 
   if (isFromLead) {
-    // Lead replied — classify intent and respond
     const decision = await classifyAndDecide(email, conversation);
     await executeDecision(decision, email, conversation);
   } else if (isFromOwner) {
-    // Owner sent another message — could be asking to follow up or share availability again
     await handleOwnerMessage(email, conversation);
   }
 }
@@ -129,7 +118,6 @@ ${config.agentName}`;
     references: [...email.references, email.messageId],
   });
 
-  // Queue follow-ups for the lead
   queueFollowUp(conversation);
 }
 
@@ -168,7 +156,7 @@ Classify the intent as one of:
 - "share_availability": The lead is asking for availability or different times.
 - "general_reply": Any other response.
 
-Respond in JSON format:
+Respond in JSON format only, no other text:
 {
   "intent": "<intent>",
   "selectedSlotIndex": <number or null>,
@@ -176,24 +164,29 @@ Respond in JSON format:
   "reply": "<a helpful, concise reply email body to send back>"
 }`;
 
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash",
-  generationConfig: {
-    temperature: 0.3,
-    responseMimeType: "application/json",
-    },
+  const response = await anthropic.messages.create({
+    model: "claude-haiku-4-20250514",
+    max_tokens: 1024,
+    messages: [{ role: "user", content: prompt }],
   });
 
-  const response = await model.generateContent(prompt);
-  const text = response.response.text();
-  const result = JSON.parse(text || "{}");
-
-  return {
-    intent: result.intent || "unknown",
-    selectedSlotIndex: result.selectedSlotIndex,
-    suggestedTime: result.suggestedTime,
-    reply: result.reply || "Thanks for your response! Let me check on this.",
-  };
+  const text = response.content[0].type === "text" ? response.content[0].text : "";
+  
+  try {
+    const result = JSON.parse(text);
+    return {
+      intent: result.intent || "unknown",
+      selectedSlotIndex: result.selectedSlotIndex,
+      suggestedTime: result.suggestedTime,
+      reply: result.reply || "Thanks for your response! Let me check on this.",
+    };
+  } catch {
+    console.error("[Agent] Failed to parse Claude response:", text);
+    return {
+      intent: "unknown",
+      reply: "Thanks for your response! Let me check on this.",
+    };
+  }
 }
 
 async function executeDecision(
@@ -213,7 +206,6 @@ async function executeDecision(
       ) {
         selectedSlot = slots[decision.selectedSlotIndex - 1];
       } else if (decision.suggestedTime) {
-        // Find the closest matching slot
         const suggested = parseISO(decision.suggestedTime);
         selectedSlot = slots.find(
           (s) => Math.abs(s.start.getTime() - suggested.getTime()) < 3600000
@@ -227,7 +219,6 @@ async function executeDecision(
           `Meeting: ${conversation.subject}`
         );
 
-        // Save booked meeting
         db.prepare(
           `INSERT INTO booked_meetings (id, conversation_id, owner_email, attendee_email, start_time, end_time, calendar_event_id, subject)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
@@ -242,13 +233,11 @@ async function executeDecision(
           conversation.subject
         );
 
-        // Cancel pending follow-ups
         db.prepare(
           `UPDATE follow_ups SET status = 'cancelled', updated_at = datetime('now')
            WHERE conversation_id = ? AND status = 'pending'`
         ).run(conversation.id);
 
-        // Update conversation status
         db.prepare(
           `UPDATE conversations SET status = 'booked', updated_at = datetime('now') WHERE id = ?`
         ).run(conversation.id);
@@ -272,7 +261,6 @@ ${config.agentName}`;
           references: [...email.references, email.messageId],
         });
       } else {
-        // Couldn't match a slot — share availability again
         await handleShareAvailability(email, conversation);
       }
       break;
@@ -320,7 +308,6 @@ async function handleOwnerMessage(
   email: ParsedEmail,
   conversation: any
 ): Promise<void> {
-  // Owner replied in the thread — re-share availability or acknowledge
   const slots = await getAvailableSlots();
   const availabilityText = formatAvailability(slots);
 
@@ -341,7 +328,7 @@ function queueFollowUp(conversation: any): void {
     )
     .get(conversation.id);
 
-  if (existing) return; // Already queued
+  if (existing) return;
 
   const nextFollowUpAt = addHours(
     new Date(),
