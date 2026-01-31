@@ -1,15 +1,17 @@
-import nodemailer from "nodemailer";
+import { google } from "googleapis";
 import { config } from "../config";
 
-const transporter = nodemailer.createTransport({
-  host: config.smtp.host,
-  port: config.smtp.port,
-  secure: config.smtp.port === 465,
-  auth: {
-    user: config.smtp.user,
-    pass: config.smtp.pass,
-  },
+const oauth2Client = new google.auth.OAuth2(
+  config.google.clientId,
+  config.google.clientSecret,
+  config.google.redirectUri
+);
+
+oauth2Client.setCredentials({
+  refresh_token: config.google.refreshToken,
 });
+
+const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
 export interface SendEmailOptions {
   to: string | string[];
@@ -19,28 +21,45 @@ export interface SendEmailOptions {
   html?: string;
   inReplyTo?: string;
   references?: string[];
-  threadSubject?: string;
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<string> {
-  const info = await transporter.sendMail({
-    from: `"${config.agentName}" <${config.agentEmail}>`,
-    to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
-    cc: options.cc
-      ? Array.isArray(options.cc)
-        ? options.cc.join(", ")
-        : options.cc
-      : undefined,
-    subject: options.subject,
-    text: options.text,
-    html: options.html,
-    inReplyTo: options.inReplyTo,
-    references: options.references,
-    headers: options.inReplyTo
-      ? { "In-Reply-To": options.inReplyTo }
-      : undefined,
-  });
+  const toAddresses = Array.isArray(options.to) ? options.to.join(", ") : options.to;
+  const ccAddresses = options.cc
+    ? Array.isArray(options.cc)
+      ? options.cc.join(", ")
+      : options.cc
+    : "";
 
-  console.log(`[EmailSender] Sent email to ${options.to}: ${info.messageId}`);
-  return info.messageId;
-}
+  // Build email headers
+  const headers = [
+    `From: "${config.agentName}" <${config.agentEmail}>`,
+    `To: ${toAddresses}`,
+    `Subject: ${options.subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+  ];
+
+  if (ccAddresses) {
+    headers.push(`Cc: ${ccAddresses}`);
+  }
+
+  if (options.inReplyTo) {
+    headers.push(`In-Reply-To: ${options.inReplyTo}`);
+  }
+
+  if (options.references && options.references.length > 0) {
+    headers.push(`References: ${options.references.join(" ")}`);
+  }
+
+  // Build raw email
+  const email = [...headers, "", options.text].join("\r\n");
+
+  // Encode to base64url
+  const encodedEmail = Buffer.from(email)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  // Send via G
