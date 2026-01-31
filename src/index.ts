@@ -99,6 +99,10 @@ app.get("/api/conversations/:threadId", (req, res) => {
  * Google OAuth2 setup flow.
  * Visit /auth/google to start, callback saves the refresh token.
  */
+app.get("/auth/google", (_req, res) => {
+  res.redirect(getAuthUrl());
+});
+
 app.get("/auth/google/callback", async (req, res) => {
   try {
     const code = req.query.code;
@@ -117,8 +121,6 @@ app.get("/auth/google/callback", async (req, res) => {
   } catch (err) {
     console.error("[Auth] Google OAuth error:", err);
     res.status(500).json({ error: "OAuth failed" });
-  }
-});
   }
 });
 
