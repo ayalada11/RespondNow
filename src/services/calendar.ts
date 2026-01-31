@@ -198,6 +198,16 @@ export function getAuthUrl(): string {
 export async function exchangeCode(
   code: string
 ): Promise<{ refreshToken: string }> {
-  const { tokens } = await oauth2Client.getToken(code);
+  // Create a fresh client for token exchange
+  const client = new google.auth.OAuth2(
+    config.google.clientId,
+    config.google.clientSecret,
+    config.google.redirectUri
+  );
+  
+  console.log("[Auth] Exchanging code with client ID:", config.google.clientId ? "exists" : "missing");
+  console.log("[Auth] Redirect URI:", config.google.redirectUri);
+  
+  const { tokens } = await client.getToken(code);
   return { refreshToken: tokens.refresh_token || "" };
 }
